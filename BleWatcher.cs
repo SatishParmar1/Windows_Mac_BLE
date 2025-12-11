@@ -29,6 +29,14 @@ namespace WindowsBleMesh
             _companyId = companyId;
             _watcher = new BluetoothLEAdvertisementWatcher();
             _watcher.ScanningMode = BluetoothLEScanningMode.Active;
+            
+            // Enable reception of Extended Advertisements
+            try
+            {
+                _watcher.AllowExtendedAdvertisements = true;
+            }
+            catch { /* Feature might not be supported on older Windows builds */ }
+
             _watcher.Received += OnAdvertisementReceived;
             _watcher.Stopped += (s, e) => Log?.Invoke(this, $"Watcher: Stopped. Error: {e.Error}");
         }

@@ -49,7 +49,10 @@ namespace WindowsBleMesh
 
     public static class BleFragmentation
     {
-        private const int MaxPayloadSize = 21;
+        // Increased from 21 to 240 for Extended Advertising support
+        // Standard Legacy: 31 bytes - overhead = ~21 bytes
+        // Extended: 255 bytes - overhead = ~240 bytes
+        private const int MaxPayloadSize = 240;
 
         public static List<BlePacket> FragmentData(byte[] data, byte msgId)
         {

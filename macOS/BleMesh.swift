@@ -84,7 +84,8 @@ class BlePublisher: NSObject, CBPeripheralManagerDelegate {
         guard let encrypted = BleSecurity.encrypt(message: message) else { return }
         
         // Fragment
-        let maxPayload = 21
+        // Increased to 240 for Extended Advertising support
+        let maxPayload = 240 
         let totalPackets = UInt8(ceil(Double(encrypted.count) / Double(maxPayload)))
         let msgId = UInt8.random(in: 0...255)
         

@@ -18,6 +18,14 @@ namespace WindowsBleMesh
         {
             _companyId = companyId;
             _publisher = new BluetoothLEAdvertisementPublisher();
+            
+            // Enable Extended Advertising (Bluetooth 5.0+)
+            try 
+            {
+                _publisher.UseExtendedAdvertisement = true;
+            }
+            catch { /* Feature might not be supported on older Windows builds */ }
+
             _publisher.StatusChanged += (sender, args) => 
             {
                 Log?.Invoke(this, $"Publisher Status: {args.Status} Error: {args.Error}");
