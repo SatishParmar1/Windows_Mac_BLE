@@ -77,9 +77,10 @@ namespace WindowsBleMesh
                         MessageReceived?.Invoke(this, message);
                         Log?.Invoke(this, $"UDP: Received message from {result.RemoteEndPoint}");
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         // Decryption failed, probably not our packet or garbage.
+                        Log?.Invoke(this, $"UDP: Decryption failed from {result.RemoteEndPoint}: {ex.Message}");
                     }
                 }
                 catch (ObjectDisposedException)

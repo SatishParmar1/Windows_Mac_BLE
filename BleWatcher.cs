@@ -28,6 +28,7 @@ namespace WindowsBleMesh
             _watcher = new BluetoothLEAdvertisementWatcher();
             _watcher.ScanningMode = BluetoothLEScanningMode.Active;
             _watcher.Received += OnAdvertisementReceived;
+            _watcher.Stopped += (s, e) => Log?.Invoke(this, $"Watcher: Stopped. Error: {e.Error}");
         }
 
         public void Start()
@@ -49,6 +50,7 @@ namespace WindowsBleMesh
             {
                 if (manufacturerData.CompanyId == _companyId)
                 {
+                    Log?.Invoke(this, $"Watcher: Found Target Company ID {manufacturerData.CompanyId:X4} from {args.BluetoothAddress:X}");
                     try
                     {
                         byte[] data = manufacturerData.Data.ToArray();
