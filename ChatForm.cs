@@ -200,7 +200,12 @@ namespace WindowsBleMesh
             {
                 try
                 {
-                    await _publisher.PublishMessageAsync(payload, 150, 5); // More repetitions for discovery
+                    // Send multiple times with slight delay to ensure reception
+                    for (int i = 0; i < 3; i++)
+                    {
+                        await _publisher.PublishMessageAsync(payload, 150, 3);
+                        await Task.Delay(500);
+                    }
                     Console.WriteLine("[BROADCAST] BLE device info sent.");
                 }
                 catch (Exception ex)

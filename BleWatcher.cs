@@ -54,15 +54,15 @@ namespace WindowsBleMesh
             {
                 if (manufacturerData.CompanyId == _companyId)
                 {
-                    Log?.Invoke(this, $"Watcher: Found Target Company ID {manufacturerData.CompanyId:X4} from {args.BluetoothAddress:X}");
+                    // Log?.Invoke(this, $"Watcher: Found Target Company ID {manufacturerData.CompanyId:X4} from {args.BluetoothAddress:X}");
                     try
                     {
                         byte[] data = manufacturerData.Data.ToArray();
                         var packet = BlePacket.FromBytes(data);
                         
                         // DEBUG: Try to read payload as text
-                        string debugPayload = System.Text.Encoding.UTF8.GetString(packet.Payload);
-                        Log?.Invoke(this, $"Watcher: Packet MsgId:{packet.MsgId:X2} Idx:{packet.Index}/{packet.Total} Content: '{debugPayload}'");
+                        // string debugPayload = System.Text.Encoding.UTF8.GetString(packet.Payload);
+                        // Log?.Invoke(this, $"Watcher: Packet MsgId:{packet.MsgId:X2} Idx:{packet.Index}/{packet.Total} Content: '{debugPayload}'");
                         
                         ProcessPacket(packet, args.BluetoothAddress);
                     }
@@ -121,6 +121,9 @@ namespace WindowsBleMesh
                 byte[] encryptedData = BleFragmentation.ReassembleData(packets);
                 // string message = BleSecurity.Decrypt(encryptedData);
                 string message = System.Text.Encoding.UTF8.GetString(encryptedData); // DEBUG: Plain Text
+
+                // Log raw message for debugging
+                Log?.Invoke(this, $"Watcher: Reassembled Message: '{message}'");
 
                 MessageReceived?.Invoke(this, message);
 

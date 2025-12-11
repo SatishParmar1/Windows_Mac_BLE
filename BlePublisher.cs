@@ -10,7 +10,7 @@ namespace WindowsBleMesh
     {
         private readonly BluetoothLEAdvertisementPublisher _publisher;
         private readonly ushort _companyId;
-        private static byte _nextMsgId = 0; // Rolling ID counter
+        private static byte _nextMsgId = (byte)new Random().Next(0, 255); // Start with random ID to avoid history collisions on receiver
 
         public event EventHandler<string> Log;
 
