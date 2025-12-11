@@ -1,13 +1,15 @@
 using System;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using Windows.Devices.Bluetooth;
 
 namespace WindowsBleMesh
 {
     public class ChatForm : Form
     {
-        private BlePublisher _publisher;
-        private BleWatcher _watcher;
+        private BlePublisher? _publisher;
+        private BleWatcher? _watcher;
         private ListBox _messageList;
         private TextBox _inputBox;
         private Button _sendButton;
@@ -15,13 +17,18 @@ namespace WindowsBleMesh
         public ChatForm()
         {
             InitializeComponent();
+        }
+
+        protected override async void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
             try 
             {
-                InitializeBle();
+                await InitializeBleAsync();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to initialize Bluetooth: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Failed to initialize Bluetooth: {ex.Message}\nEnsure Bluetooth is turned ON.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -55,13 +62,30 @@ namespace WindowsBleMesh
             bottomPanel.Controls.Add(_inputBox);
         }
 
-        private void InitializeBle()
+        private async Task InitializeBleAsync()
         {
+            var adapter = await BluetoothAdapter.GetDefaultAsync();
+            if (adapter == null)
+            {
+                AddMessage("Error: No Bluetooth Adapter found on this device.");
+                AddMessage("Please ensure your PC has Bluetooth and it is turned ON.");
+                _inputBox.Enabled = false;
+                _sendButton.Enabled = false;
+                return;
+            }
+
+            if (!adapter.IsLowEnergySupported)
+            {
+                AddMessage("Error: Your Bluetooth adapter does not support Low Energy (BLE).");
+                return;
+            }
+
             _publisher = new BlePublisher();
             _watcher = new BleWatcher();
             _watcher.MessageReceived += OnMessageReceived;
             _watcher.Start();
             
+            AddMessage("System: Bluetooth initialized successfully.");
             AddMessage("System: Listening for messages...");
         }
 
@@ -79,6 +103,11 @@ namespace WindowsBleMesh
         {
             string text = _inputBox.Text.Trim();
             if (string.IsNullOrEmpty(text)) return;
+            if (_publisher == null) 
+            {
+                AddMessage("Error: Bluetooth not initialized.");
+                return;
+            }
 
             _inputBox.Text = "";
             AddMessage($"Me: {text}");
@@ -110,7 +139,7 @@ namespace WindowsBleMesh
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            _watcher.Stop();
+            _watcher?.Stop();
             base.OnFormClosing(e);
         }
     }
