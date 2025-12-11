@@ -45,7 +45,9 @@ namespace WindowsBleMesh
 
         private void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
         {
-            // Log?.Invoke(this, $"Watcher: Adv received from {args.BluetoothAddress:X} RSSI: {args.RawSignalStrengthInDBm}");
+            // Log every packet as requested ("open connection every message")
+            Log?.Invoke(this, $"Watcher: RX {args.BluetoothAddress:X} RSSI: {args.RawSignalStrengthInDBm}");
+
             foreach (var manufacturerData in args.Advertisement.ManufacturerData)
             {
                 if (manufacturerData.CompanyId == _companyId)
