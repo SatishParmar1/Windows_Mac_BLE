@@ -1,0 +1,29 @@
+# .NET Core
+bin/
+obj/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleasePublic/
+[xX]64/
+[xX]86/
+[bB]uild/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# macOS
+.DS_Store

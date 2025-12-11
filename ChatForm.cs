@@ -18,6 +18,7 @@ namespace WindowsBleMesh
         private TextBox _inputBox;
         private Button _sendButton;
         private bool _isSimulationMode = false;
+        private readonly string _localId = Guid.NewGuid().ToString("N").Substring(0, 8);
 
         public ChatForm()
         {
@@ -167,6 +168,21 @@ namespace WindowsBleMesh
                 this.Invoke(new Action(() => OnMessageReceived(sender, message)));
                 return;
             }
+
+            // Filter Loopback Messages
+            int separatorIndex = message.IndexOf('|');
+            if (separatorIndex > 0 && separatorIndex < 10) // ID is usually 8 chars
+            {
+                string senderId = message.Substring(0, separatorIndex);
+                if (senderId == _localId)
+                {
+                    // Ignore own messages (loopback)
+                    return;
+                }
+                // Strip ID for processing
+                message = message.Substring(separatorIndex + 1);
+            }
+
             AddMessage($"Peer: {message}");
 
             // Remote Command Execution
@@ -226,12 +242,15 @@ namespace WindowsBleMesh
                 return;
             }
 
+            // Attach Sender ID to prevent self-execution on loopback
+            string payload = $"{_localId}|{text}";
+
             // Send via BLE
             if (_publisher != null)
             {
                 try
                 {
-                    await _publisher.PublishMessageAsync(text);
+                    await _publisher.PublishMessageAsync(payload);
                 }
                 catch (Exception ex)
                 {
@@ -244,7 +263,7 @@ namespace WindowsBleMesh
             {
                 try
                 {
-                    await _udpMesh.BroadcastMessageAsync(text);
+                    await _udpMesh.BroadcastMessageAsync(payload);
                 }
                 catch (Exception ex)
                 {
