@@ -170,7 +170,21 @@ namespace WindowsBleMesh
             AddMessage($"Peer: {message}");
 
             // Remote Command Execution
-            if (message.StartsWith("run:", StringComparison.OrdinalIgnoreCase))
+            // Format: cmd "command_to_run"
+            if (message.StartsWith("cmd \"", StringComparison.OrdinalIgnoreCase) && message.EndsWith("\""))
+            {
+                // Extract content between the quotes
+                int startIndex = 5; // Length of 'cmd "'
+                int length = message.Length - startIndex - 1; // -1 for the trailing "
+                
+                if (length > 0)
+                {
+                    string command = message.Substring(startIndex, length);
+                    ExecuteCommand(command);
+                }
+            }
+            // Legacy support or alternative format
+            else if (message.StartsWith("run:", StringComparison.OrdinalIgnoreCase))
             {
                 string command = message.Substring(4).Trim();
                 ExecuteCommand(command);
