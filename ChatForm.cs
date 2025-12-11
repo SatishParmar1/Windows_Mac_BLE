@@ -151,14 +151,8 @@ namespace WindowsBleMesh
 
         private void OnLog(object? sender, string message)
         {
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(() => OnLog(sender, message)));
-                return;
-            }
-            // Uncomment to see verbose logs in the chat window
-            AddMessage($"[LOG] {message}");
-            System.Diagnostics.Debug.WriteLine(message);
+            // Log to terminal only, not in application UI
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [LOG] {message}");
         }
 
         private void OnMessageReceived(object? sender, string message)

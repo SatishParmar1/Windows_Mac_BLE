@@ -46,7 +46,7 @@ namespace WindowsBleMesh
         private void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
         {
             // Log every packet as requested ("open connection every message")
-            Log?.Invoke(this, $"Watcher: RX {args.BluetoothAddress:X} RSSI: {args.RawSignalStrengthInDBm}");
+            // Log?.Invoke(this, $"Watcher: RX {args.BluetoothAddress:X} RSSI: {args.RawSignalStrengthInDBm}");
 
             foreach (var manufacturerData in args.Advertisement.ManufacturerData)
             {
@@ -57,7 +57,11 @@ namespace WindowsBleMesh
                     {
                         byte[] data = manufacturerData.Data.ToArray();
                         var packet = BlePacket.FromBytes(data);
-                        Log?.Invoke(this, $"Watcher: Packet received MsgId:{packet.MsgId} Idx:{packet.Index}/{packet.Total}");
+                        
+                        // DEBUG: Try to read payload as text
+                        string debugPayload = System.Text.Encoding.UTF8.GetString(packet.Payload);
+                        Log?.Invoke(this, $"Watcher: Packet MsgId:{packet.MsgId:X2} Idx:{packet.Index}/{packet.Total} Content: '{debugPayload}'");
+                        
                         ProcessPacket(packet);
                     }
                     catch (Exception ex)
@@ -100,7 +104,8 @@ namespace WindowsBleMesh
             try
             {
                 byte[] encryptedData = BleFragmentation.ReassembleData(packets);
-                string message = BleSecurity.Decrypt(encryptedData);
+                // string message = BleSecurity.Decrypt(encryptedData);
+                string message = System.Text.Encoding.UTF8.GetString(encryptedData); // DEBUG: Plain Text
 
                 MessageReceived?.Invoke(this, message);
 

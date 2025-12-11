@@ -29,7 +29,8 @@ namespace WindowsBleMesh
             Log?.Invoke(this, $"Publisher: Preparing to send '{message}'");
 
             // 1. Encrypt
-            byte[] encryptedData = BleSecurity.Encrypt(message);
+            // byte[] encryptedData = BleSecurity.Encrypt(message);
+            byte[] encryptedData = System.Text.Encoding.UTF8.GetBytes(message); // DEBUG: Plain Text for visibility
 
             // 2. Fragment
             // Use Rolling MsgId (0-255) as per spec

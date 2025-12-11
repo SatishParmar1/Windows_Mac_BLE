@@ -44,7 +44,8 @@ namespace WindowsBleMesh
             {
                 // We can reuse the BleSecurity encryption if we want, or send plain for now.
                 // Let's use the same encryption to be consistent.
-                byte[] encryptedData = BleSecurity.Encrypt(message);
+                // byte[] encryptedData = BleSecurity.Encrypt(message);
+                byte[] encryptedData = Encoding.UTF8.GetBytes(message); // DEBUG: Plain Text
                 
                 // Prefix with a "Magic Byte" to distinguish from other traffic if needed, 
                 // but for now just send the encrypted bytes.
@@ -72,7 +73,9 @@ namespace WindowsBleMesh
                     byte[] data = result.Buffer;
                     try
                     {
-                        string message = BleSecurity.Decrypt(data);
+                        // string message = BleSecurity.Decrypt(data);
+                        string message = Encoding.UTF8.GetString(data); // DEBUG: Plain Text
+
                         // If decryption succeeds, it's likely our message.
                         MessageReceived?.Invoke(this, message);
                         Log?.Invoke(this, $"UDP: Received message from {result.RemoteEndPoint}");
