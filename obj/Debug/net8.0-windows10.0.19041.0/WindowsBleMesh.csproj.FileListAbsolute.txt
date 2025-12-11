@@ -1,0 +1,17 @@
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.exe
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.deps.json
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.runtimeconfig.json
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.dll
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.pdb
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\Microsoft.Windows.SDK.NET.dll
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\WinRT.Runtime.dll
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.GeneratedMSBuildEditorConfig.editorconfig
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.AssemblyInfoInputs.cache
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.AssemblyInfo.cs
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.csproj.CoreCompileInputs.cache
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsB.CB0BE715.Up2Date
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.dll
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\refint\WindowsBleMesh.dll
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.pdb
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.genruntimeconfig.cache
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\ref\WindowsBleMesh.dll
