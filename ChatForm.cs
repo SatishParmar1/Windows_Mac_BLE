@@ -15,7 +15,14 @@ namespace WindowsBleMesh
         public ChatForm()
         {
             InitializeComponent();
-            InitializeBle();
+            try 
+            {
+                InitializeBle();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to initialize Bluetooth: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void InitializeComponent()
