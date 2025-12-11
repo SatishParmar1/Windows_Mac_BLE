@@ -16,3 +16,6 @@ D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.pdb
 D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.genruntimeconfig.cache
 D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\ref\WindowsBleMesh.dll
 D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.sourcelink.json
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\System.Management.dll
+D:\WindowsBLE\bin\Debug\net8.0-windows10.0.19041.0\runtimes\win\lib\net8.0\System.Management.dll
+D:\WindowsBLE\obj\Debug\net8.0-windows10.0.19041.0\WindowsBleMesh.csproj.AssemblyReference.cache

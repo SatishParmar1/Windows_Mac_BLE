@@ -9,4 +9,8 @@
     <Platforms>x64;x86;ARM64</Platforms>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

@@ -15,14 +15,34 @@ namespace WindowsBleMesh
         private UdpMesh? _udpMesh;
         private NotifyIcon _trayIcon;
         private ListBox _messageList;
+        private ListBox _deviceList;
         private TextBox _inputBox;
         private Button _sendButton;
         private bool _isSimulationMode = false;
-        private readonly string _localId = Guid.NewGuid().ToString("N").Substring(0, 8);
+        
+        // Device identification
+        private readonly DeviceInfo _localDevice;
+        private readonly string _localId;
+        private readonly DeviceRegistry _deviceRegistry = new();
 
         public ChatForm()
         {
+            // Collect local device info on startup
+            _localDevice = DeviceInfo.CollectLocalInfo();
+            _localId = _localDevice.DeviceId;
+            
+            Console.WriteLine($"[DEVICE] Local Device ID: {_localId}");
+            Console.WriteLine($"[DEVICE] Machine: {_localDevice.MachineName}");
+            Console.WriteLine($"[DEVICE] User: {_localDevice.UserName}");
+            Console.WriteLine($"[DEVICE] Platform: {_localDevice.Platform}");
+            Console.WriteLine($"[DEVICE] MAC: {_localDevice.MACAddress}");
+            Console.WriteLine($"[DEVICE] IPs: {string.Join(", ", _localDevice.IPAddresses)}");
+            
             InitializeComponent();
+            
+            // Subscribe to device registry events
+            _deviceRegistry.DeviceDiscovered += OnDeviceDiscovered;
+            _deviceRegistry.DeviceUpdated += OnDeviceUpdated;
         }
 
         protected override async void OnLoad(EventArgs e)
@@ -40,19 +60,45 @@ namespace WindowsBleMesh
 
         private void InitializeComponent()
         {
-            this.Text = "Windows BLE Mesh Chat";
-            this.Size = new Size(500, 600);
+            this.Text = $"Windows BLE Mesh Chat - [{_localId}]";
+            this.Size = new Size(700, 650);
+
+            // Split panel for messages and devices
+            var splitContainer = new SplitContainer();
+            splitContainer.Dock = DockStyle.Fill;
+            splitContainer.Orientation = Orientation.Vertical;
+            splitContainer.SplitterDistance = 500;
+            this.Controls.Add(splitContainer);
 
             _messageList = new ListBox();
-            _messageList.Dock = DockStyle.Top;
-            _messageList.Height = 500;
+            _messageList.Dock = DockStyle.Fill;
             _messageList.Font = new Font("Segoe UI", 10);
-            this.Controls.Add(_messageList);
+            splitContainer.Panel1.Controls.Add(_messageList);
+
+            // Device list panel
+            var devicePanel = new Panel();
+            devicePanel.Dock = DockStyle.Fill;
+            splitContainer.Panel2.Controls.Add(devicePanel);
+
+            var deviceLabel = new Label();
+            deviceLabel.Text = "Discovered Devices:";
+            deviceLabel.Dock = DockStyle.Top;
+            deviceLabel.Height = 20;
+            deviceLabel.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            devicePanel.Controls.Add(deviceLabel);
+
+            _deviceList = new ListBox();
+            _deviceList.Dock = DockStyle.Fill;
+            _deviceList.Font = new Font("Consolas", 9);
+            _deviceList.DoubleClick += DeviceList_DoubleClick;
+            devicePanel.Controls.Add(_deviceList);
+            _deviceList.BringToFront();
 
             var bottomPanel = new Panel();
             bottomPanel.Dock = DockStyle.Bottom;
             bottomPanel.Height = 60;
             this.Controls.Add(bottomPanel);
+            bottomPanel.BringToFront();
 
             _sendButton = new Button();
             _sendButton.Text = "Send";
@@ -132,11 +178,52 @@ namespace WindowsBleMesh
                 
                 AddMessage("System: Bluetooth initialized successfully.");
                 AddMessage("System: Listening for messages...");
+                
+                // Broadcast device info on startup
+                await BroadcastDeviceInfoAsync();
             }
             catch (Exception ex)
             {
                 EnableSimulationMode($"Init failed: {ex.Message}");
             }
+        }
+
+        private async Task BroadcastDeviceInfoAsync()
+        {
+            AddMessage($"System: Broadcasting device info (ID: {_localId})...");
+            Console.WriteLine($"[BROADCAST] Sending device info: {_localDevice.ToCompactString()}");
+            
+            string payload = _localDevice.ToCompactString();
+            
+            // Send via BLE
+            if (_publisher != null)
+            {
+                try
+                {
+                    await _publisher.PublishMessageAsync(payload, 150, 5); // More repetitions for discovery
+                    Console.WriteLine("[BROADCAST] BLE device info sent.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BROADCAST] BLE Error: {ex.Message}");
+                }
+            }
+            
+            // Send via UDP
+            if (_udpMesh != null)
+            {
+                try
+                {
+                    await _udpMesh.BroadcastMessageAsync(payload);
+                    Console.WriteLine("[BROADCAST] UDP device info sent.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BROADCAST] UDP Error: {ex.Message}");
+                }
+            }
+            
+            AddMessage("System: Device info broadcasted.");
         }
 
         private void EnableSimulationMode(string reason)
@@ -163,15 +250,36 @@ namespace WindowsBleMesh
                 return;
             }
 
-            // Filter Loopback Messages
+            Console.WriteLine($"[RX] Raw message: {message}");
+
+            // Check if this is a device info broadcast
+            if (message.StartsWith("DEV|"))
+            {
+                var deviceInfo = DeviceInfo.FromCompactString(message);
+                if (deviceInfo != null)
+                {
+                    // Ignore own device info
+                    if (deviceInfo.DeviceId == _localId)
+                    {
+                        Console.WriteLine("[RX] Ignored own device info.");
+                        return;
+                    }
+                    
+                    Console.WriteLine($"[DEVICE] Discovered: {deviceInfo}");
+                    _deviceRegistry.RegisterDevice(deviceInfo);
+                    return;
+                }
+            }
+
+            // Filter Loopback Messages (legacy format: ID|message)
             int separatorIndex = message.IndexOf('|');
-            if (separatorIndex > 0 && separatorIndex < 10) // ID is usually 8 chars
+            if (separatorIndex > 0 && separatorIndex < 20) // ID can be up to 16 chars now
             {
                 string senderId = message.Substring(0, separatorIndex);
                 if (senderId == _localId)
                 {
                     // Ignore own messages (loopback)
-                    AddMessage("[Debug] Ignored loopback message (Self).");
+                    Console.WriteLine("[RX] Ignored loopback message (Self).");
                     return;
                 }
                 // Strip ID for processing
@@ -292,6 +400,65 @@ namespace WindowsBleMesh
         {
             _messageList.Items.Add($"[{DateTime.Now:HH:mm:ss}] {msg}");
             _messageList.TopIndex = _messageList.Items.Count - 1;
+        }
+
+        private void OnDeviceDiscovered(object? sender, DeviceInfo device)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => OnDeviceDiscovered(sender, device)));
+                return;
+            }
+            
+            AddMessage($"[NEW DEVICE] {device}");
+            UpdateDeviceList();
+            
+            Console.WriteLine($"[DEVICE] NEW: {device.DeviceId} - {device.MachineName} ({device.UserName})");
+            Console.WriteLine($"         Platform: {device.Platform}");
+            Console.WriteLine($"         MAC: {device.MACAddress}");
+            Console.WriteLine($"         IPs: {string.Join(", ", device.IPAddresses)}");
+        }
+
+        private void OnDeviceUpdated(object? sender, DeviceInfo device)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => OnDeviceUpdated(sender, device)));
+                return;
+            }
+            
+            UpdateDeviceList();
+            Console.WriteLine($"[DEVICE] Updated: {device}");
+        }
+
+        private void UpdateDeviceList()
+        {
+            _deviceList.Items.Clear();
+            foreach (var device in _deviceRegistry.GetAllDevices())
+            {
+                _deviceList.Items.Add($"[{device.DeviceId}] {device.MachineName} - {device.UserName}");
+            }
+        }
+
+        private void DeviceList_DoubleClick(object? sender, EventArgs e)
+        {
+            if (_deviceList.SelectedIndex >= 0)
+            {
+                var devices = _deviceRegistry.GetAllDevices().ToList();
+                if (_deviceList.SelectedIndex < devices.Count)
+                {
+                    var device = devices[_deviceList.SelectedIndex];
+                    var details = $"Device ID: {device.DeviceId}\n" +
+                                  $"Machine: {device.MachineName}\n" +
+                                  $"User: {device.UserName}\n" +
+                                  $"Platform: {device.Platform}\n" +
+                                  $"MAC: {device.MACAddress}\n" +
+                                  $"IPs: {string.Join(", ", device.IPAddresses)}\n" +
+                                  $"Last Seen: {device.Timestamp}";
+                    
+                    MessageBox.Show(details, "Device Details", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

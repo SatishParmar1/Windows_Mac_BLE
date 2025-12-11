@@ -1,6 +1,8 @@
 import CoreBluetooth
 import CryptoKit
 import Foundation
+import IOKit
+import CommonCrypto
 
 // MARK: - Protocol Definitions
 
@@ -228,23 +230,192 @@ class BleWatcher: NSObject, CBCentralManagerDelegate {
 class BleChat: NSObject {
     let publisher = BlePublisher()
     let watcher = BleWatcher()
+    let localDeviceInfo: DeviceInfo
     
     var onMessageReceived: ((String) -> Void)? {
         get { watcher.onMessageReceived }
         set { watcher.onMessageReceived = newValue }
     }
     
+    var onDeviceDiscovered: ((DeviceInfo) -> Void)?
+    
     override init() {
+        localDeviceInfo = DeviceInfo.collectLocal()
         super.init()
+        
+        // Setup message handler to detect device info
+        watcher.onMessageReceived = { [weak self] message in
+            self?.handleMessage(message)
+        }
+    }
+    
+    private func handleMessage(_ message: String) {
+        // Check if this is a device info broadcast
+        if message.hasPrefix("DEV|") {
+            if let device = DeviceInfo.fromCompact(message) {
+                // Ignore own device
+                if device.deviceId != localDeviceInfo.deviceId {
+                    print("[DEVICE] Discovered: \(device.machineName) (\(device.userName))")
+                    onDeviceDiscovered?(device)
+                }
+            }
+            return
+        }
+        
+        // Handle regular messages
+        // Filter loopback by sender ID
+        if let separatorIndex = message.firstIndex(of: "|") {
+            let senderId = String(message[..<separatorIndex])
+            if senderId == localDeviceInfo.deviceId {
+                print("[RX] Ignored loopback")
+                return
+            }
+            let actualMessage = String(message[message.index(after: separatorIndex)...])
+            onMessageReceived?(actualMessage)
+        } else {
+            onMessageReceived?(message)
+        }
     }
     
     func send(message: String) {
+        let payload = "\(localDeviceInfo.deviceId)|\(message)"
         print("Me: \(message)")
-        publisher.publish(message: message)
+        publisher.publish(message: payload)
+    }
+    
+    func broadcastDeviceInfo() {
+        print("[BROADCAST] Sending device info: \(localDeviceInfo.toCompact())")
+        publisher.publish(message: localDeviceInfo.toCompact())
     }
     
     func startListening() {
         watcher.start()
+        // Broadcast device info on startup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.broadcastDeviceInfo()
+        }
+    }
+}
+
+// MARK: - Device Info
+
+struct DeviceInfo {
+    let deviceId: String
+    let machineName: String
+    let userName: String
+    let platform: String
+    let macAddress: String
+    let ipAddresses: [String]
+    let timestamp: Date
+    
+    /// Generate unique device ID based on hardware
+    static func generateDeviceId() -> String {
+        // Use hardware UUID on macOS
+        let platformExpert = IOServiceGetMatchingService(kIOMainPortDefault,
+            IOServiceMatching("IOPlatformExpertDevice"))
+        
+        guard platformExpert != 0 else {
+            return UUID().uuidString.prefix(16).uppercased()
+        }
+        
+        defer { IOObjectRelease(platformExpert) }
+        
+        if let serialNumber = IORegistryEntryCreateCFProperty(platformExpert,
+            kIOPlatformUUIDKey as CFString, kCFAllocatorDefault, 0)?.takeUnretainedValue() as? String {
+            // Hash it to get a shorter ID
+            let data = Data(serialNumber.utf8)
+            var hash = [UInt8](repeating: 0, count: 32)
+            data.withUnsafeBytes {
+                _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
+            }
+            return hash.prefix(8).map { String(format: "%02X", $0) }.joined()
+        }
+        
+        return UUID().uuidString.prefix(16).uppercased()
+    }
+    
+    static func collectLocal() -> DeviceInfo {
+        let deviceId = generateDeviceId()
+        let machineName = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+        let userName = NSUserName()
+        let platform = "macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
+        
+        // Get MAC address
+        var macAddress = ""
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        if getifaddrs(&ifaddr) == 0 {
+            var ptr = ifaddr
+            while ptr != nil {
+                defer { ptr = ptr?.pointee.ifa_next }
+                guard let interface = ptr?.pointee else { continue }
+                let name = String(cString: interface.ifa_name)
+                if name == "en0" {
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
+                               &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
+                    // For MAC, we need link layer
+                    if interface.ifa_addr.pointee.sa_family == UInt8(AF_LINK) {
+                        let dlAddr = interface.ifa_addr.withMemoryRebound(to: sockaddr_dl.self, capacity: 1) { $0.pointee }
+                        let lladdr = UnsafeRawPointer(&dlAddr).advanced(by: Int(dlAddr.sdl_nlen) + 8)
+                        let bytes = lladdr.assumingMemoryBound(to: UInt8.self)
+                        macAddress = (0..<6).map { String(format: "%02X", bytes[$0]) }.joined(separator: "-")
+                    }
+                }
+            }
+            freeifaddrs(ifaddr)
+        }
+        
+        // Get IP addresses
+        var ipAddresses: [String] = []
+        var addrs: UnsafeMutablePointer<ifaddrs>?
+        if getifaddrs(&addrs) == 0 {
+            var ptr = addrs
+            while ptr != nil {
+                defer { ptr = ptr?.pointee.ifa_next }
+                guard let interface = ptr?.pointee else { continue }
+                if interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
+                               &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
+                    let ip = String(cString: hostname)
+                    if !ip.hasPrefix("127.") {
+                        ipAddresses.append(ip)
+                    }
+                }
+            }
+            freeifaddrs(addrs)
+        }
+        
+        return DeviceInfo(
+            deviceId: deviceId,
+            machineName: machineName,
+            userName: userName,
+            platform: platform,
+            macAddress: macAddress,
+            ipAddresses: ipAddresses,
+            timestamp: Date()
+        )
+    }
+    
+    /// Create compact string for BLE transmission
+    func toCompact() -> String {
+        return "DEV|\(deviceId)|\(machineName)|\(userName)|\(platform)|\(macAddress)|\(ipAddresses.joined(separator: ","))"
+    }
+    
+    /// Parse compact string format
+    static func fromCompact(_ compact: String) -> DeviceInfo? {
+        let parts = compact.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 6, parts[0] == "DEV" else { return nil }
+        
+        return DeviceInfo(
+            deviceId: parts[1],
+            machineName: parts[2],
+            userName: parts[3],
+            platform: parts[4],
+            macAddress: parts[5],
+            ipAddresses: parts.count > 6 ? parts[6].split(separator: ",").map(String.init) : [],
+            timestamp: Date()
+        )
     }
 }
 
@@ -252,6 +423,9 @@ class BleChat: NSObject {
 
 // In a real macOS app (SwiftUI/AppKit), you would use BleChat like this:
 // let chat = BleChat()
+// chat.onDeviceDiscovered = { device in
+//     print("Found device: \(device.machineName)")
+// }
 // chat.startListening()
 // chat.send(message: "Hello Windows!")
 
