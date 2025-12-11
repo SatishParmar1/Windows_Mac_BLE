@@ -16,6 +16,7 @@ namespace WindowsBleMesh
         private readonly HashSet<byte> _completedMessages = new(); // To avoid re-processing same message
 
         public event EventHandler<string> MessageReceived;
+        public event EventHandler<string> Log;
 
         public BleWatcher(ushort companyId = 0x1234)
         {
@@ -27,18 +28,19 @@ namespace WindowsBleMesh
 
         public void Start()
         {
-            // Console.WriteLine("Starting Watcher...");
+            Log?.Invoke(this, "Watcher: Starting scan...");
             _watcher.Start();
         }
 
         public void Stop()
         {
-            // Console.WriteLine("Stopping Watcher...");
+            Log?.Invoke(this, "Watcher: Stopping scan...");
             _watcher.Stop();
         }
 
         private void OnAdvertisementReceived(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
         {
+            // Log?.Invoke(this, $"Watcher: Adv received from {args.BluetoothAddress:X} RSSI: {args.RawSignalStrengthInDBm}");
             foreach (var manufacturerData in args.Advertisement.ManufacturerData)
             {
                 if (manufacturerData.CompanyId == _companyId)
@@ -47,12 +49,12 @@ namespace WindowsBleMesh
                     {
                         byte[] data = manufacturerData.Data.ToArray();
                         var packet = BlePacket.FromBytes(data);
-
+                        Log?.Invoke(this, $"Watcher: Packet received MsgId:{packet.MsgId} Idx:{packet.Index}/{packet.Total}");
                         ProcessPacket(packet);
                     }
                     catch (Exception ex)
                     {
-                        // Console.WriteLine($"Error parsing packet: {ex.Message}");
+                        Log?.Invoke(this, $"Watcher: Error parsing packet: {ex.Message}");
                     }
                 }
             }
@@ -99,7 +101,7 @@ namespace WindowsBleMesh
             }
             catch (Exception ex)
             {
-                // Console.WriteLine($"Error decrypting message {msgId:X2}: {ex.Message}");
+                Log?.Invoke(this, $"Watcher: Error decrypting message {msgId:X2}: {ex.Message}");
             }
         }
     }

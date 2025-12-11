@@ -81,12 +81,27 @@ namespace WindowsBleMesh
             }
 
             _publisher = new BlePublisher();
+            _publisher.Log += OnLog;
+            
             _watcher = new BleWatcher();
             _watcher.MessageReceived += OnMessageReceived;
+            _watcher.Log += OnLog;
             _watcher.Start();
             
             AddMessage("System: Bluetooth initialized successfully.");
             AddMessage("System: Listening for messages...");
+        }
+
+        private void OnLog(object? sender, string message)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => OnLog(sender, message)));
+                return;
+            }
+            // Uncomment to see verbose logs in the chat window
+            AddMessage($"[LOG] {message}");
+            System.Diagnostics.Debug.WriteLine(message);
         }
 
         private void OnMessageReceived(object? sender, string message)
