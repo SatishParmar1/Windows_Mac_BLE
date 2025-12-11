@@ -43,9 +43,15 @@ namespace WindowsBleMesh
             // 2. Fragment
             // Use Rolling MsgId (0-255) as per spec
             byte msgId = _nextMsgId++;
-            List<BlePacket> packets = BleFragmentation.FragmentData(encryptedData, msgId);
+            
+            // Determine payload size based on advertising mode
+            int payloadSize = _publisher.UseExtendedAdvertisement 
+                ? BleFragmentation.ExtendedPayloadSize 
+                : BleFragmentation.LegacyPayloadSize;
 
-            Log?.Invoke(this, $"Publisher: Split into {packets.Count} packets. MsgId: {msgId:X2}");
+            List<BlePacket> packets = BleFragmentation.FragmentData(encryptedData, msgId, payloadSize);
+
+            Log?.Invoke(this, $"Publisher: Split into {packets.Count} packets (Size: {payloadSize}). MsgId: {msgId:X2}");
 
             // 3. Advertise
             for (int r = 0; r < repetitions; r++)

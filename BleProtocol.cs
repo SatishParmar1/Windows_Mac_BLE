@@ -49,23 +49,23 @@ namespace WindowsBleMesh
 
     public static class BleFragmentation
     {
-        // Increased from 21 to 240 for Extended Advertising support
         // Standard Legacy: 31 bytes - overhead = ~21 bytes
         // Extended: 255 bytes - overhead = ~240 bytes
-        private const int MaxPayloadSize = 240;
+        public const int LegacyPayloadSize = 21;
+        public const int ExtendedPayloadSize = 240;
 
-        public static List<BlePacket> FragmentData(byte[] data, byte msgId)
+        public static List<BlePacket> FragmentData(byte[] data, byte msgId, int maxPayloadSize = LegacyPayloadSize)
         {
             var packets = new List<BlePacket>();
-            int totalPackets = (int)Math.Ceiling((double)data.Length / MaxPayloadSize);
+            int totalPackets = (int)Math.Ceiling((double)data.Length / maxPayloadSize);
 
             if (totalPackets > 255)
                 throw new ArgumentException("Data too large for protocol");
 
             for (int i = 0; i < totalPackets; i++)
             {
-                int offset = i * MaxPayloadSize;
-                int length = Math.Min(MaxPayloadSize, data.Length - offset);
+                int offset = i * maxPayloadSize;
+                int length = Math.Min(maxPayloadSize, data.Length - offset);
                 var chunk = new byte[length];
                 Array.Copy(data, offset, chunk, 0, length);
 
@@ -84,7 +84,7 @@ namespace WindowsBleMesh
         public static byte[] ReassembleData(List<BlePacket> packets)
         {
             packets.Sort((a, b) => a.Index.CompareTo(b.Index));
-            var data = new List<byte>();
+            var data = new List<byte>();  
             foreach (var packet in packets)
             {
                 if (packet.Payload != null)
