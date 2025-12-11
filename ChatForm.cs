@@ -177,6 +177,7 @@ namespace WindowsBleMesh
                 if (senderId == _localId)
                 {
                     // Ignore own messages (loopback)
+                    AddMessage("[Debug] Ignored loopback message (Self).");
                     return;
                 }
                 // Strip ID for processing
@@ -250,12 +251,18 @@ namespace WindowsBleMesh
             {
                 try
                 {
+                    AddMessage("[System] Broadcasting via BLE...");
                     await _publisher.PublishMessageAsync(payload);
+                    AddMessage("[System] BLE Broadcast Complete.");
                 }
                 catch (Exception ex)
                 {
                     AddMessage($"Error sending BLE: {ex.Message}");
                 }
+            }
+            else
+            {
+                AddMessage("[System] Warning: BLE Publisher is not initialized.");
             }
 
             // Send via UDP
@@ -263,12 +270,18 @@ namespace WindowsBleMesh
             {
                 try
                 {
+                    AddMessage("[System] Broadcasting via UDP...");
                     await _udpMesh.BroadcastMessageAsync(payload);
+                    AddMessage("[System] UDP Broadcast Complete.");
                 }
                 catch (Exception ex)
                 {
                     AddMessage($"Error sending UDP: {ex.Message}");
                 }
+            }
+            else
+            {
+                AddMessage("[System] Warning: UDP Mesh is not initialized.");
             }
         }
 

@@ -13,7 +13,11 @@ namespace WindowsBleMesh
         
         // MsgId -> (Total, ReceivedPackets)
         private readonly Dictionary<byte, Dictionary<byte, BlePacket>> _messageBuffer = new();
-        private readonly HashSet<byte> _completedMessages = new(); // To avoid re-processing same message
+        
+        // Cache of recently processed message IDs to avoid duplicates
+        private readonly HashSet<byte> _completedMessages = new(); 
+        private readonly Queue<byte> _completedMessagesQueue = new();
+        private const int MaxHistory = 50;
 
         public event EventHandler<string> MessageReceived;
         public event EventHandler<string> Log;
@@ -96,12 +100,24 @@ namespace WindowsBleMesh
 
                 MessageReceived?.Invoke(this, message);
 
-                _completedMessages.Add(msgId);
+                // Update duplicate detection history
+                if (!_completedMessages.Contains(msgId))
+                {
+                    _completedMessages.Add(msgId);
+                    _completedMessagesQueue.Enqueue(msgId);
+                    
+                    if (_completedMessagesQueue.Count > MaxHistory)
+                    {
+                        byte oldId = _completedMessagesQueue.Dequeue();
+                        _completedMessages.Remove(oldId);
+                    }
+                }
+
                 _messageBuffer.Remove(msgId);
             }
             catch (Exception ex)
             {
-                Log?.Invoke(this, $"Watcher: Error decrypting message {msgId:X2}: {ex.Message}");
+                Log?.Invoke(this, $"Watcher: Error reassembling/decrypting: {ex.Message}");
             }
         }
     }
