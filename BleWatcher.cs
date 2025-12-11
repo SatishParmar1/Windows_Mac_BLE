@@ -11,12 +11,14 @@ namespace WindowsBleMesh
         private readonly BluetoothLEAdvertisementWatcher _watcher;
         private readonly ushort _companyId;
         
-        // MsgId -> (Total, ReceivedPackets)
-        private readonly Dictionary<byte, Dictionary<byte, BlePacket>> _messageBuffer = new();
+        // Address -> MsgId -> (Index -> Packet)
+        private readonly Dictionary<ulong, Dictionary<byte, Dictionary<byte, BlePacket>>> _messageBuffer = new();
         
-        // Cache of recently processed message IDs to avoid duplicates
-        private readonly HashSet<byte> _completedMessages = new(); 
-        private readonly Queue<byte> _completedMessagesQueue = new();
+        // Address -> Set of completed MsgIds
+        private readonly Dictionary<ulong, HashSet<byte>> _completedMessages = new(); 
+        // Address -> Queue for history management
+        private readonly Dictionary<ulong, Queue<byte>> _completedMessagesQueue = new();
+        
         private const int MaxHistory = 50;
 
         public event EventHandler<string> MessageReceived;
@@ -62,7 +64,7 @@ namespace WindowsBleMesh
                         string debugPayload = System.Text.Encoding.UTF8.GetString(packet.Payload);
                         Log?.Invoke(this, $"Watcher: Packet MsgId:{packet.MsgId:X2} Idx:{packet.Index}/{packet.Total} Content: '{debugPayload}'");
                         
-                        ProcessPacket(packet);
+                        ProcessPacket(packet, args.BluetoothAddress);
                     }
                     catch (Exception ex)
                     {
@@ -72,34 +74,47 @@ namespace WindowsBleMesh
             }
         }
 
-        private void ProcessPacket(BlePacket packet)
+        private void ProcessPacket(BlePacket packet, ulong address)
         {
             lock (_messageBuffer)
             {
-                if (_completedMessages.Contains(packet.MsgId))
-                    return; // Already processed this message
-
-                if (!_messageBuffer.ContainsKey(packet.MsgId))
+                // Initialize structures for this address if needed
+                if (!_completedMessages.ContainsKey(address))
                 {
-                    _messageBuffer[packet.MsgId] = new Dictionary<byte, BlePacket>();
+                    _completedMessages[address] = new HashSet<byte>();
+                    _completedMessagesQueue[address] = new Queue<byte>();
                 }
 
-                var fragments = _messageBuffer[packet.MsgId];
+                if (_completedMessages[address].Contains(packet.MsgId))
+                    return; // Already processed this message from this sender
+
+                if (!_messageBuffer.ContainsKey(address))
+                {
+                    _messageBuffer[address] = new Dictionary<byte, Dictionary<byte, BlePacket>>();
+                }
+
+                var senderBuffer = _messageBuffer[address];
+
+                if (!senderBuffer.ContainsKey(packet.MsgId))
+                {
+                    senderBuffer[packet.MsgId] = new Dictionary<byte, BlePacket>();
+                }
+
+                var fragments = senderBuffer[packet.MsgId];
                 if (!fragments.ContainsKey(packet.Index))
                 {
                     fragments[packet.Index] = packet;
-                    // Console.WriteLine($"Received Packet {packet.Index}/{packet.Total} for MsgId: {packet.MsgId:X2}");
-
+                    
                     if (fragments.Count == packet.Total)
                     {
                         // All packets received
-                        CompleteMessage(packet.MsgId, fragments.Values.ToList());
+                        CompleteMessage(packet.MsgId, fragments.Values.ToList(), address);
                     }
                 }
             }
         }
 
-        private void CompleteMessage(byte msgId, List<BlePacket> packets)
+        private void CompleteMessage(byte msgId, List<BlePacket> packets, ulong address)
         {
             try
             {
@@ -109,20 +124,26 @@ namespace WindowsBleMesh
 
                 MessageReceived?.Invoke(this, message);
 
-                // Update duplicate detection history
-                if (!_completedMessages.Contains(msgId))
+                // Update duplicate detection history for this sender
+                var completedSet = _completedMessages[address];
+                var completedQueue = _completedMessagesQueue[address];
+
+                if (!completedSet.Contains(msgId))
                 {
-                    _completedMessages.Add(msgId);
-                    _completedMessagesQueue.Enqueue(msgId);
+                    completedSet.Add(msgId);
+                    completedQueue.Enqueue(msgId);
                     
-                    if (_completedMessagesQueue.Count > MaxHistory)
+                    if (completedQueue.Count > MaxHistory)
                     {
-                        byte oldId = _completedMessagesQueue.Dequeue();
-                        _completedMessages.Remove(oldId);
+                        byte oldId = completedQueue.Dequeue();
+                        completedSet.Remove(oldId);
                     }
                 }
 
-                _messageBuffer.Remove(msgId);
+                if (_messageBuffer.ContainsKey(address))
+                {
+                    _messageBuffer[address].Remove(msgId);
+                }
             }
             catch (Exception ex)
             {
