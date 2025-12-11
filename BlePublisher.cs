@@ -10,6 +10,7 @@ namespace WindowsBleMesh
     {
         private readonly BluetoothLEAdvertisementPublisher _publisher;
         private readonly ushort _companyId;
+        private static byte _nextMsgId = 0; // Rolling ID counter
 
         public event EventHandler<string> Log;
 
@@ -23,7 +24,7 @@ namespace WindowsBleMesh
             };
         }
 
-        public async Task PublishMessageAsync(string message, int durationPerPacketMs = 200, int repetitions = 3)
+        public async Task PublishMessageAsync(string message, int durationPerPacketMs = 100, int repetitions = 3)
         {
             Log?.Invoke(this, $"Publisher: Preparing to send '{message}'");
 
@@ -31,8 +32,8 @@ namespace WindowsBleMesh
             byte[] encryptedData = BleSecurity.Encrypt(message);
 
             // 2. Fragment
-            // Generate a random MsgId
-            byte msgId = (byte)new Random().Next(0, 256);
+            // Use Rolling MsgId (0-255) as per spec
+            byte msgId = _nextMsgId++;
             List<BlePacket> packets = BleFragmentation.FragmentData(encryptedData, msgId);
 
             Log?.Invoke(this, $"Publisher: Split into {packets.Count} packets. MsgId: {msgId:X2}");

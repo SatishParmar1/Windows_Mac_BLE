@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WindowsBleMesh")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c044ac8104f0bded057d56fb82b738fcd0faa444")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c6a2eea6b108e3951fa22a49566109122fe3f178")]
 [assembly: System.Reflection.AssemblyProductAttribute("WindowsBleMesh")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WindowsBleMesh")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
